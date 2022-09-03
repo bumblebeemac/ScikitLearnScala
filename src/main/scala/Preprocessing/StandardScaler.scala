@@ -1,14 +1,14 @@
 package Preprocessing
 
-import org.apache.spark.sql.functions.{col, mean, stddev}
+import org.apache.spark.sql.functions.{col, lit, mean, stddev}
 import org.apache.spark.sql.DataFrame
 
 import scala.annotation.tailrec
 
 /**
  * @see https://scikit-learn.org/stable/modules/generated/sklearn.preprocessing.StandardScaler.html#sklearn.preprocessing.StandardScaler
- * @param inputDF
- * @param featureCols
+ * @param inputDF spark dataframe with feature columns to be scaled
+ * @param featureCols list of string with feature column names
  */
 class StandardScaler(inputDF: DataFrame, featureCols: List[String]) {
 
@@ -26,9 +26,11 @@ class StandardScaler(inputDF: DataFrame, featureCols: List[String]) {
 
     val featureDF: DataFrame = inputDF.select(featureCols.map(col): _*)
 
-    val standardizeFunc: (DataFrame, String) => DataFrame = (x, y) =>
-      x.withColumn("std_" + y,
-        (col(y) - x.select(mean(y)).head().getDouble(0)) / x.select(stddev(y)).head().getDouble(0))
+    val standardizeFunc: (DataFrame, String) => DataFrame = (df, colName) => {
+      val meanValue = df.select(mean(colName)).head().getDouble(0)
+      val stddevValue = df.select(stddev(colName)).head().getDouble(0)
+      df.withColumn(colName, (col(colName) - lit(meanValue)) / lit(stddevValue))
+    }
 
     def transformFunc(df: DataFrame): DataFrame = {
       val featureColsIter = featureCols.iterator
@@ -41,7 +43,7 @@ class StandardScaler(inputDF: DataFrame, featureCols: List[String]) {
       recursorHelper(df)
     }
 
-    val transformedDF: DataFrame = transformFunc(featureDF).drop(featureCols: _*)
+    val transformedDF: DataFrame = transformFunc(featureDF)
     transformedDF
   }
 
